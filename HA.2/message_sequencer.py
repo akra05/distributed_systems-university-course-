@@ -4,9 +4,20 @@ import time
 import random 
 import sys
 import os
+from dataclasses import dataclass
 
 NUMBER_OF_THREADS =  int(sys.argv[1])
 NUMBER_OF_MESSAGES = int(sys.argv[2])
+
+@dataclass(frozen=True)
+class ExternalMessage:
+    payload: int
+
+@dataclass(frozen=True)
+class InternalMessage:
+    payload: int
+    thread_id: int
+    task_id: int
 
 #worker thread 
 #receives two types of messsages
@@ -30,11 +41,11 @@ def worker(thread_id, queue, sequencer_queue, histories):
             histories.append(history)
             break
         #if message is external, message is propagated to the seqeuencer
-        if msg["type"] == "external":
-            msg["thread_id"] = thread_id
-            sequencer_queue.put(msg)
+        if isinstance(msg,ExternalMessage):
+            internal_message = InternalMessage(msg.payload,thread_id,-1)
+            sequencer_queue.put(internal_message)
         #if message is internal, thread writes answer from the sequencer into the history list
-        if msg["type"] == "internal":
+        if isinstance(msg,InternalMessage):
             history.append(msg)
             print(msg)
 
@@ -50,11 +61,10 @@ def sequencer(dict):
         if msg is None:
             break
 
-        msg["id"] = id
-        msg["type"] = "internal"
+        answer_message = InternalMessage(msg.payload,msg.thread_id,id)
 
         for i in range(NUMBER_OF_THREADS):
-            dict[i].put(msg)
+            dict[i].put(answer_message)
         id = id + 1
 
 #simulated client: sends messages in random time intervals to a random worker with message_type: external
@@ -63,7 +73,7 @@ def client(dict):
     for i in range(NUMBER_OF_MESSAGES):
         time.sleep(random.uniform(0.1,1))
         q = dict[random.randint(0,NUMBER_OF_THREADS-1)]
-        q.put({"type":"external","value":i})
+        q.put(ExternalMessage(i))
     print("Now I am finished")
 
     
